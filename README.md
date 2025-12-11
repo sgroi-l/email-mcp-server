@@ -1,333 +1,142 @@
 # Email MCP Server
 
-An MCP (Model Context Protocol) server that provides email management capabilities for Gmail, including fetching unread emails, generating AI-powered draft replies using Claude, and saving drafts.
+An MCP (Model Context Protocol) server that brings email management capabilities to Claude Desktop. Fetch unread emails, generate AI-powered draft replies, and manage your Gmail inbox using natural language.
+
+## What It Does
+
+This server integrates Gmail with Claude Desktop, allowing you to:
+
+- Fetch unread emails from your Gmail inbox
+- Generate contextual draft replies with customizable tone using Claude AI
+- Save drafts directly to Gmail with proper email threading
+- Send emails via Gmail API
+- Interact with your inbox using natural language in Claude Desktop
 
 ## Features
 
-- **Fetch Unread Emails**: Retrieve unread emails from your Gmail inbox via Gmail API
-- **Generate AI Draft Replies**: Use Claude AI to generate contextual email replies with customizable tone
-- **Save Drafts**: Save draft emails directly to Gmail
-- **Send Emails**: Send emails via Gmail API
-- **OAuth 2.0 Authentication**: Secure authentication using Google OAuth (no app passwords needed!)
+- **OAuth 2.0 Authentication**: Secure Google authentication (no app passwords needed)
+- **AI-Powered Replies**: Generate smart email replies using Claude
+- **Email Threading**: Maintains conversation threads when replying
+- **Flexible Tone Control**: Choose professional, casual, or friendly tones for replies
+- **Direct Gmail Integration**: Drafts appear in your Gmail Drafts folder
 
-## Prerequisites
+## Quick Start
+
+### Prerequisites
 
 - Python 3.8+
 - Gmail account
-- Google Cloud Project with Gmail API enabled
-- OAuth 2.0 credentials from Google Cloud Console
-- Anthropic API key (for AI-powered draft replies)
-- Claude Desktop (for MCP integration)
+- Google Cloud Project with Gmail API enabled ([Setup Guide](docs/oauth-setup.md))
+- Anthropic API key ([Get one here](https://console.anthropic.com))
+- Claude Desktop installed
 
-## Setup
+### Installation
 
-### 1. Configure Gmail API and OAuth 2.0
+1. **Clone and install dependencies:**
+   ```bash
+   cd email-mcp-server
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-#### Create Google Cloud Project
+2. **Set up Google OAuth 2.0:**
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Gmail API:
-   - Navigate to **APIs & Services > Library**
-   - Search for "Gmail API"
-   - Click **Enable**
+   Follow the detailed [OAuth Setup Guide](docs/oauth-setup.md) to:
+   - Create a Google Cloud Project
+   - Enable Gmail API
+   - Configure OAuth consent screen
+   - Download `credentials.json`
 
-#### Configure OAuth Consent Screen
+3. **Authenticate with Gmail:**
+   ```bash
+   source venv/bin/activate
+   python gmail_auth.py
+   ```
 
-1. Go to **APIs & Services > OAuth consent screen**
-2. Choose **External** user type (or **Internal** if using Google Workspace)
-3. Fill in the required fields:
-   - App name: "Email MCP Server" (or your preferred name)
-   - User support email: Your email address
-   - Developer contact: Your email address
-4. Click **Save and Continue**
+   This opens your browser to authorize the app and saves a `token.json` file.
 
-#### Add OAuth Scopes
+4. **Configure Claude Desktop:**
 
-1. On the Scopes page, click **Add or Remove Scopes**
-2. Add these scopes:
-   - `https://www.googleapis.com/auth/gmail.readonly` - Read emails
-   - `https://www.googleapis.com/auth/gmail.compose` - Create drafts
-   - `https://www.googleapis.com/auth/gmail.modify` - Modify emails
-   - `https://www.googleapis.com/auth/gmail.send` - Send emails
-3. Click **Update** and **Save and Continue**
+   Add to your Claude Desktop config file:
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Linux**: `~/.config/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-#### Add Test Users
+   ```json
+   {
+     "mcpServers": {
+       "email": {
+         "command": "/absolute/path/to/email-mcp-server/venv/bin/python",
+         "args": ["/absolute/path/to/email-mcp-server/email_server.py"],
+         "env": {
+           "ANTHROPIC_API_KEY": "sk-ant-api03-..."
+         }
+       }
+     }
+   }
+   ```
 
-1. On the Test users page, click **+ ADD USERS**
-2. Add your Gmail address
-3. Click **Save**
+5. **Restart Claude Desktop**
 
-#### Create OAuth Credentials
+## Usage
 
-1. Go to **APIs & Services > Credentials**
-2. Click **Create Credentials > OAuth client ID**
-3. Choose **Desktop app** as the application type
-4. Enter a name (e.g., "Email MCP Client")
-5. Click **Create**
-6. Download the credentials JSON file
-7. Save it as `credentials.json` in the project directory
+Once configured, interact with your emails in Claude Desktop using natural language:
 
-### 2. Install Dependencies
+- "Show me my unread emails"
+- "Generate a professional reply to the first email"
+- "Draft a friendly response mentioning the project is on track"
+- "Save that reply as a draft in Gmail"
 
-```bash
-cd email-mcp-server
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Authenticate with Gmail
-
-Run the authentication script to complete the OAuth flow:
-
-```bash
-source venv/bin/activate
-python gmail_auth.py
-```
-
-This will:
-1. Open your browser for Google sign-in
-2. Ask you to authorize the app
-3. Save a `token.json` file with your credentials
-
-**Note:** You may see a warning "Google hasn't verified this app" - this is normal for apps in testing mode. Click **"Advanced"** and **"Go to email-mcp-server (unsafe)"** to proceed.
-
-The `token.json` file contains your refresh token and will be used automatically by the MCP server. You won't need to re-authenticate unless you revoke access or delete this file.
-
-### 4. Get Anthropic API Key
-
-1. Sign up at [https://console.anthropic.com](https://console.anthropic.com)
-2. Create an API key from the dashboard
-3. Keep this key secure - you'll add it to the Claude Desktop config
-
-### 5. Configure Claude Desktop
-
-Add to your Claude Desktop configuration file at `~/.config/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "email": {
-      "command": "/path/to/your/email-mcp-server/venv/bin/python",
-      "args": ["/path/to/your/email-mcp-server/email_server.py"],
-      "env": {
-        "ANTHROPIC_API_KEY": "your-anthropic-api-key"
-      }
-    }
-  }
-}
-```
-
-**Example (replace paths with your actual paths):**
-```json
-{
-  "mcpServers": {
-    "email": {
-      "command": "/home/username/mcp/email-mcp-server/venv/bin/python",
-      "args": ["/home/username/mcp/email-mcp-server/email_server.py"],
-      "env": {
-        "ANTHROPIC_API_KEY": "sk-ant-api03-..."
-      }
-    }
-  }
-}
-```
-
-**Important Notes:**
-- Make sure both `credentials.json` and `token.json` are in the project directory
-- These files are already in `.gitignore` - never commit them to version control
-- After updating the config, restart Claude Desktop for changes to take effect
+For more examples and workflows, see the [Usage Examples Guide](docs/usage-examples.md).
 
 ## Available Tools
 
-### 1. get_unread_emails
+The server provides four MCP tools that Claude can use:
 
-Fetch unread emails from Gmail inbox.
+### get_unread_emails
+Fetches unread emails from Gmail. Optional parameter: `max_emails` (default: 10)
 
-**Parameters:**
-- `max_emails` (optional): Maximum number of emails to fetch (default: 10)
+### generate_draft_reply
+Generates AI-powered email replies. Parameters: `email_from`, `email_subject`, `email_body`, `email_date`, optional `tone` and `additional_context`
 
-**Example:**
-```json
-{
-  "max_emails": 5
-}
-```
+### save_draft
+Saves draft emails to Gmail. Parameters: `to`, `subject`, `body`, optional `in_reply_to` for threading
 
-### 2. generate_draft_reply
+### send_email
+Sends emails immediately. Parameters: `to`, `subject`, `body`
 
-Generate an AI-powered draft reply using Claude.
+## Documentation
 
-**Parameters:**
-- `email_from`: The sender's email address
-- `email_subject`: The subject of the email
-- `email_body`: The body of the email
-- `email_date`: The date of the email
-- `tone` (optional): Tone of the reply (e.g., "professional", "casual", "friendly")
-- `additional_context` (optional): Additional context for the AI to consider
+- [Google OAuth 2.0 Setup Guide](docs/oauth-setup.md) - Step-by-step OAuth configuration with screenshot placeholders
+- [Usage Examples](docs/usage-examples.md) - Real-world usage examples and workflows with Claude Desktop
+- [Troubleshooting Guide](docs/troubleshooting.md) - Common issues and solutions
 
-**Example:**
-```json
-{
-  "email_from": "sender@example.com",
-  "email_subject": "Project Update",
-  "email_body": "How is the project coming along?",
-  "email_date": "Mon, 13 Nov 2024 10:30:00",
-  "tone": "professional",
-  "additional_context": "The project is on track and will be completed by Friday"
-}
-```
+## Security
 
-### 3. save_draft
-
-Save a draft email to Gmail.
-
-**Parameters:**
-- `to`: Recipient email address
-- `subject`: Email subject
-- `body`: Email body content
-- `in_reply_to` (optional): Message ID of the email being replied to
-
-**Example:**
-```json
-{
-  "to": "recipient@example.com",
-  "subject": "Re: Project Update",
-  "body": "The project is progressing well...",
-  "in_reply_to": "<message-id@example.com>"
-}
-```
-
-### 4. send_email
-
-Send an email immediately.
-
-**Parameters:**
-- `to`: Recipient email address
-- `subject`: Email subject
-- `body`: Email body content
-
-**Example:**
-```json
-{
-  "to": "recipient@example.com",
-  "subject": "Hello",
-  "body": "This is a test email."
-}
-```
-
-## Demo: Working with Claude Desktop
-
-Once configured, you can interact with your emails through Claude Desktop using natural language.
-
-### Example Prompts
-
-**1. Check unread emails:**
-```
-"Show me my unread emails"
-"What are my latest 5 unread emails?"
-"Check my inbox for unread messages"
-```
-
-**2. Generate draft replies:**
-```
-"Generate a professional reply to the first email"
-"Draft a friendly response to the email from [sender]"
-"Create a casual reply to the project update email with a professional tone"
-```
-
-**3. Save drafts:**
-```
-"Save that reply as a draft in Gmail"
-"Create a draft reply to [sender] about [topic]"
-```
-
-**4. Complete workflow:**
-```
-"Check my unread emails, then draft a professional reply to the most recent one and save it as a draft"
-```
-
-### Workflow Example
-
-1. **Fetch unread emails:**
-   - Claude calls `get_unread_emails` tool
-   - Returns sender, subject, body, date, and message ID for each email
-
-2. **Generate a draft reply:**
-   - Claude calls `generate_draft_reply` with email details and desired tone
-   - AI generates contextual response using Claude Haiku
-
-3. **Save the draft to Gmail:**
-   - Claude calls `save_draft` with recipient, subject, body, and threading info
-   - Draft appears in your Gmail Drafts folder, properly threaded
-
-### Screenshots
-
-To demonstrate the MCP server in action, consider adding screenshots showing:
-- Claude Desktop fetching unread emails
-- AI-generated draft replies
-- Confirmation of drafts saved to Gmail
-- The complete workflow from reading to replying
-
-*(You can add screenshots to a `screenshots/` folder and reference them here)*
-
-## Security Notes
-
-- Never commit `credentials.json` or `token.json` to version control (they're in `.gitignore`)
-- OAuth tokens are stored securely in `token.json` with file permissions
-- The refresh token allows automatic re-authentication without user interaction
-- Revoke access anytime from your [Google Account](https://myaccount.google.com/permissions)
-- Consider using environment-specific credentials for production deployments
-
-## Troubleshooting
-
-### OAuth Authentication Issues
-
-**"Access blocked: email-mcp-server has not completed the Google verification process"**
-- Make sure you've added yourself as a test user in the OAuth consent screen
-- Go to **APIs & Services > OAuth consent screen > Test users** and add your email
-
-**"Google hasn't verified this app" warning**
-- This is normal for apps in testing mode
-- Click **"Advanced"** → **"Go to email-mcp-server (unsafe)"** to proceed
-- For personal use only, this is perfectly safe
-
-**Token refresh fails**
-- Delete `token.json` and run `python gmail_auth.py` again to re-authenticate
-- Check that your Google Cloud project is still active
-- Verify the Gmail API is still enabled
-
-### Permission Errors
-
-**"Insufficient Permission" or "Request had insufficient authentication scopes"**
-- Delete `token.json`
-- Re-run `python gmail_auth.py` to get a new token with correct scopes
-- Verify all required scopes are added to your OAuth consent screen
-
-### Revoke and Reset
-
-To revoke access and start fresh:
-
-```bash
-python gmail_auth.py revoke
-```
-
-Then re-authenticate:
-
-```bash
-python gmail_auth.py
-```
+- Never commit `credentials.json` or `token.json` (already in `.gitignore`)
+- OAuth tokens are stored locally in `token.json`
+- Refresh tokens enable automatic re-authentication
+- Revoke access anytime at [Google Account Permissions](https://myaccount.google.com/permissions)
 
 ## Development
 
-To run the server in development mode:
+Run the server manually for testing:
 
 ```bash
-cd email
+cd email-mcp-server
 source venv/bin/activate
 python email_server.py
 ```
+
+## Troubleshooting
+
+For common issues like OAuth errors, permission problems, or Claude Desktop integration issues, see the [Troubleshooting Guide](docs/troubleshooting.md).
+
+Quick fixes:
+- **OAuth issues**: Make sure you're added as a test user in Google Cloud Console
+- **Permission errors**: Delete `token.json` and re-run `python gmail_auth.py`
+- **MCP not working**: Verify paths are absolute in Claude Desktop config and restart the app
 
 ## License
 
