@@ -2,34 +2,45 @@
 
 import asyncio
 import os
+import base64
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
-import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from imapclient import IMAPClient
 import email
 from email.header import decode_header
 from email_reply_parser import EmailReplyParser
 import anthropic
+from gmail_auth import get_gmail_service
 
 
 async def send_email(to: str, subject: str, body: str):
-    email_user = os.environ['EMAIL_USER']
-    email_password = os.environ['EMAIL_APP_PASSWORD']
+    """Send an email using Gmail API"""
+    service = get_gmail_service()
 
+    # Get the authenticated user's email
+    profile = service.users().getProfile(userId='me').execute()
+    email_user = profile['emailAddress']
+
+    # Create message
     msg = MIMEMultipart()
     msg['From'] = email_user
     msg['To'] = to
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
-    with smtplib.SMTP('smtp.gmail.com', 587) as server:
-        server.starttls()
-        server.login(email_user, email_password)
-        server.send_message(msg)
+    # Encode the message
+    raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+
+    # Send via Gmail API
+    message = service.users().messages().send(
+        userId='me',
+        body={'raw': raw_message}
+    ).execute()
+
+    return message['id']
 
 
 def decode_mime_words(s):
@@ -44,71 +55,69 @@ def decode_mime_words(s):
 
 
 async def get_unread_emails(max_emails: int = 10):
-    """Fetch unread emails from Gmail via IMAP"""
-    email_user = os.environ['EMAIL_USER']
-    email_password = os.environ['EMAIL_APP_PASSWORD']
+    """Fetch unread emails from Gmail via Gmail API"""
+    service = get_gmail_service()
 
-    # Connect to Gmail IMAP
-    with IMAPClient('imap.gmail.com', ssl=True) as client:
-        client.login(email_user, email_password)
-        client.select_folder('INBOX', readonly=True)
+    # Search for unread messages in INBOX
+    results = service.users().messages().list(
+        userId='me',
+        q='is:unread in:inbox',
+        maxResults=max_emails
+    ).execute()
 
-        # Search for unread messages
-        messages = client.search(['UNSEEN'])
+    messages = results.get('messages', [])
 
-        if not messages:
-            return []
+    if not messages:
+        return []
 
-        # Sort by message ID in descending order (newest first) and limit to max_emails
-        messages = sorted(messages, reverse=True)[:max_emails]
+    emails = []
+    for msg_info in messages:
+        # Get full message details
+        msg = service.users().messages().get(
+            userId='me',
+            id=msg_info['id'],
+            format='full'
+        ).execute()
 
-        # Fetch message data
-        response = client.fetch(messages, ['RFC822', 'FLAGS'])
+        # Extract headers
+        headers = {h['name']: h['value'] for h in msg['payload']['headers']}
+        from_addr = headers.get('From', '')
+        subject = headers.get('Subject', '')
+        date = headers.get('Date', '')
+        message_id = headers.get('Message-ID', '')
 
-        emails = []
-        for msg_id, data in response.items():
-            raw_email = data[b'RFC822']
-            msg = email.message_from_bytes(raw_email)
+        # Extract email body
+        body = ""
+        if 'parts' in msg['payload']:
+            # Multipart message
+            for part in msg['payload']['parts']:
+                if part['mimeType'] == 'text/plain':
+                    if 'data' in part['body']:
+                        body = base64.urlsafe_b64decode(
+                            part['body']['data']
+                        ).decode('utf-8')
+                        break
+        else:
+            # Simple message
+            if 'data' in msg['payload']['body']:
+                body = base64.urlsafe_b64decode(
+                    msg['payload']['body']['data']
+                ).decode('utf-8')
 
-            # Extract email details
-            from_addr = decode_mime_words(msg.get('From', ''))
-            subject = decode_mime_words(msg.get('Subject', ''))
-            date = msg.get('Date', '')
-            message_id = msg.get('Message-ID', '')
+        # Parse reply using email_reply_parser
+        parsed_body = EmailReplyParser.parse_reply(body)
 
-            # Extract email body
-            body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    content_type = part.get_content_type()
-                    content_disposition = str(part.get('Content-Disposition', ''))
+        emails.append({
+            'id': msg_info['id'],
+            'message_id': message_id,
+            'from': from_addr,
+            'subject': subject,
+            'date': date,
+            'body': parsed_body,
+            'full_body': body
+        })
 
-                    if content_type == 'text/plain' and 'attachment' not in content_disposition:
-                        try:
-                            body = part.get_payload(decode=True).decode()
-                            break
-                        except:
-                            pass
-            else:
-                try:
-                    body = msg.get_payload(decode=True).decode()
-                except:
-                    body = str(msg.get_payload())
-
-            # Parse reply using email_reply_parser
-            parsed_body = EmailReplyParser.parse_reply(body)
-
-            emails.append({
-                'id': str(msg_id),
-                'message_id': message_id,
-                'from': from_addr,
-                'subject': subject,
-                'date': date,
-                'body': parsed_body,
-                'full_body': body
-            })
-
-        return emails
+    return emails
 
 
 async def generate_draft_reply(email_content: dict, tone: str = "professional", additional_context: str = ""):
@@ -142,9 +151,12 @@ Please generate a clear, concise, and {tone} reply to this email. Only provide t
 
 
 async def save_draft_to_gmail(to: str, subject: str, body: str, in_reply_to: str = None):
-    """Save a draft email to Gmail"""
-    email_user = os.environ['EMAIL_USER']
-    email_password = os.environ['EMAIL_APP_PASSWORD']
+    """Save a draft email to Gmail using Gmail API"""
+    service = get_gmail_service()
+
+    # Get the authenticated user's email
+    profile = service.users().getProfile(userId='me').execute()
+    email_user = profile['emailAddress']
 
     # Create the email message
     msg = MIMEMultipart()
@@ -156,21 +168,20 @@ async def save_draft_to_gmail(to: str, subject: str, body: str, in_reply_to: str
         msg['References'] = in_reply_to
     msg.attach(MIMEText(body, 'plain'))
 
-    # Connect to Gmail IMAP and save as draft
-    with IMAPClient('imap.gmail.com', ssl=True) as client:
-        client.login(email_user, email_password)
+    # Encode the message
+    raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
 
-        # Gmail uses [Gmail]/Drafts folder
-        try:
-            client.select_folder('[Gmail]/Drafts')
-        except:
-            # Try alternative draft folder names
-            client.select_folder('Drafts')
+    # Create draft via Gmail API
+    draft = service.users().drafts().create(
+        userId='me',
+        body={
+            'message': {
+                'raw': raw_message
+            }
+        }
+    ).execute()
 
-        # Append the message to the Drafts folder
-        client.append('[Gmail]/Drafts', msg.as_bytes(), flags=['\\Draft'])
-
-    return True
+    return draft['id']
 
 
 server = Server("email-server")
