@@ -67,7 +67,7 @@ This will:
 2. Ask you to authorize the app
 3. Save a `token.json` file with your credentials
 
-![Browser Auth Screenshot](screenshots/test-auth.png)
+![Test Auth Screenshot](screenshots/test-auth.png)
 *Screenshot: Testing the authentication flow*
 
 ![Browser Auth Screenshot](screenshots/08-browser-auth.png)
@@ -76,7 +76,7 @@ This will:
 ![App Warning Screenshot](screenshots/09-app-warning.png)
 *Screenshot: "Google hasn't verified this app" warning*
 
-![Success Screenshot](screenshots/access.png)
+![Access Screenshot](screenshots/access.png)
 *Screenshot: Allow access*
 
 ![Success Screenshot](screenshots/10-auth-success.png)

@@ -14,6 +14,48 @@ from email.header import decode_header
 from email_reply_parser import EmailReplyParser
 import anthropic
 from gmail_auth import get_gmail_service
+import requests
+from datetime import datetime, timedelta
+
+
+# Global cache for style guide
+style_guide_cache = {
+    'content': None,
+    'url': None,
+    'timestamp': None,
+    'cache_duration': timedelta(hours=1)  # Cache for 1 hour
+}
+
+
+async def fetch_style_guide(url: str) -> str:
+    """Fetch style guide from a URL (supports Google Docs export URLs)
+
+    For Google Docs, use the export URL format:
+    https://docs.google.com/document/d/DOCUMENT_ID/export?format=txt
+    """
+    global style_guide_cache
+
+    # Check if we have a valid cached version
+    if (style_guide_cache['content'] and
+        style_guide_cache['url'] == url and
+        style_guide_cache['timestamp'] and
+        datetime.now() - style_guide_cache['timestamp'] < style_guide_cache['cache_duration']):
+        return style_guide_cache['content']
+
+    # Fetch new content
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        content = response.text
+
+        # Update cache
+        style_guide_cache['content'] = content
+        style_guide_cache['url'] = url
+        style_guide_cache['timestamp'] = datetime.now()
+
+        return content
+    except Exception as e:
+        raise Exception(f"Failed to fetch style guide from {url}: {str(e)}")
 
 
 async def send_email(to: str, subject: str, body: str):
@@ -120,9 +162,17 @@ async def get_unread_emails(max_emails: int = 10):
     return emails
 
 
-async def generate_draft_reply(email_content: dict, tone: str = "professional", additional_context: str = ""):
+async def generate_draft_reply(email_content: dict, tone: str = "professional", additional_context: str = "", style_guide_url: str = None):
     """Generate an AI-powered draft reply using Claude"""
     client = anthropic.Anthropic()
+
+    # Fetch style guide if provided
+    style_guide_content = ""
+    if style_guide_url:
+        try:
+            style_guide_content = await fetch_style_guide(style_guide_url)
+        except Exception as e:
+            style_guide_content = f"[Note: Could not fetch style guide: {str(e)}]"
 
     # Construct the prompt
     prompt = f"""You are helping draft a reply to an email. Generate a {tone} response.
@@ -137,7 +187,9 @@ Body:
 
 {f"Additional Context: {additional_context}" if additional_context else ""}
 
-Please generate a clear, concise, and {tone} reply to this email. Only provide the email body text, without any subject line or greetings like "Dear [Name]" unless specifically needed for the context."""
+{f"Email Style Guide to Follow:\n{style_guide_content}\n" if style_guide_content and not style_guide_content.startswith("[Note:") else ""}
+
+Please generate a clear, concise, and {tone} reply to this email. {f"Follow the style guide provided above." if style_guide_content and not style_guide_content.startswith("[Note:") else ""} Only provide the email body text, without any subject line or greetings like "Dear [Name]" unless specifically needed for the context."""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -236,6 +288,10 @@ async def handle_list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Additional context or instructions for the reply (optional)",
                     },
+                    "style_guide_url": {
+                        "type": "string",
+                        "description": "URL to fetch email style guide from (e.g., Google Docs export URL: https://docs.google.com/document/d/DOC_ID/export?format=txt). The style guide will be used to guide the tone and format of the reply. Results are cached for 1 hour. (optional)",
+                    },
                 },
                 "required": ["email_body"],
             },
@@ -298,11 +354,14 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         }
         tone = arguments.get('tone', 'professional')
         additional_context = arguments.get('additional_context', '')
+        style_guide_url = arguments.get('style_guide_url')
 
-        draft_reply = await generate_draft_reply(email_content, tone, additional_context)
+        draft_reply = await generate_draft_reply(email_content, tone, additional_context, style_guide_url)
 
         result = f"Generated Draft Reply:\n\n{draft_reply}\n\n"
         result += f"(Tone: {tone})"
+        if style_guide_url:
+            result += f"\n(Style guide applied from: {style_guide_url})"
 
         return [types.TextContent(type="text", text=result)]
 

@@ -58,7 +58,7 @@ You can send emails immediately without saving as a draft:
 ![Send Email Screenshot](screenshots/05-send-email.png)
 *Screenshot: Claude sending an email using the send_email tool*
 
-![Send Email Screenshot](screenshots/06-gmail-inbox.png)
+![Receive Email Screenshot](screenshots/06-gmail-inbox.png)
 *Screenshot: Email appearing in inbox*
 
 

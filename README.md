@@ -16,6 +16,7 @@ This server integrates Gmail with Claude Desktop, allowing you to:
 
 - **OAuth 2.0 Authentication**: Secure Google authentication (no app passwords needed)
 - **AI-Powered Replies**: Generate smart email replies using Claude
+- **Style Guide Integration**: Pull email style guides from Google Docs or any URL to ensure consistent messaging
 - **Email Threading**: Maintains conversation threads when replying
 - **Flexible Tone Control**: Choose professional, casual, or friendly tones for replies
 - **Direct Gmail Integration**: Drafts appear in your Gmail Drafts folder
@@ -86,9 +87,10 @@ Once configured, interact with your emails in Claude Desktop using natural langu
 - "Show me my unread emails"
 - "Generate a professional reply to the first email"
 - "Draft a friendly response mentioning the project is on track"
+- "Generate a reply using my company style guide at https://docs.google.com/document/d/YOUR_DOC_ID/export?format=txt"
 - "Save that reply as a draft in Gmail"
 
-For more examples and workflows, see the [Usage Examples Guide](docs/usage-examples.md).
+For more examples and workflows, see the [Usage Examples Guide](docs/usage-examples.md) and [Style Guide Feature Guide](docs/style-guide-feature.md).
 
 ## Available Tools
 
@@ -98,7 +100,13 @@ The server provides four MCP tools that Claude can use:
 Fetches unread emails from Gmail. Optional parameter: `max_emails` (default: 10)
 
 ### generate_draft_reply
-Generates AI-powered email replies. Parameters: `email_from`, `email_subject`, `email_body`, `email_date`, optional `tone` and `additional_context`
+Generates AI-powered email replies. Parameters: `email_from`, `email_subject`, `email_body`, `email_date`, optional `tone`, `additional_context`, and `style_guide_url`
+
+**Style Guide Support**: Pass a `style_guide_url` parameter to fetch an external email style guide (e.g., from Google Docs). The AI will follow the style guide when generating replies. For Google Docs, use the export URL format:
+```
+https://docs.google.com/document/d/YOUR_DOC_ID/export?format=txt
+```
+Style guides are cached for 1 hour to improve performance.
 
 ### save_draft
 Saves draft emails to Gmail. Parameters: `to`, `subject`, `body`, optional `in_reply_to` for threading
