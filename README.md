@@ -2,6 +2,8 @@
 
 An MCP (Model Context Protocol) server that brings email management capabilities to Claude Desktop. Fetch unread emails, generate AI-powered draft replies, and manage your Gmail inbox using natural language.
 
+Check the [docs](docs/) for more detailed set up instructions and usage examples.
+
 ## What It Does
 
 This server integrates Gmail with Claude Desktop, allowing you to:
